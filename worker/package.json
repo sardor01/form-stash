@@ -1,7 +1,7 @@
 {
   "name": "form-stash-worker",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "scripts": {
     "prepare-config": "node scripts/render-wrangler.mjs",
     "predeploy": "pnpm prepare-config",

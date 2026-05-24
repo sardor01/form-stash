@@ -1,18 +1,18 @@
-import { v4 as uuid } from 'uuid';
 import type {
   FieldSnapshot,
   FormDef,
   Preset,
   Project,
-} from '../shared/types';
-import type { SaveTarget } from './SaveForm';
+} from '../shared/types'
+import type { SaveTarget } from './SaveForm'
+import { v4 as uuid } from 'uuid'
 
 export interface BuildPresetArgs {
-  label: string;
-  target: SaveTarget;
-  fields: FieldSnapshot[];
-  page: { url: string; origin: string; path: string };
-  existingPresets: Preset[];
+  label: string
+  target: SaveTarget
+  fields: FieldSnapshot[]
+  page: { url: string, origin: string, path: string }
+  existingPresets: Preset[]
 }
 
 export function buildPreset({
@@ -21,7 +21,7 @@ export function buildPreset({
   fields,
   page,
 }: BuildPresetArgs): Preset {
-  const now = Date.now();
+  const now = Date.now()
   if (target.kind === 'standalone') {
     return {
       id: uuid(),
@@ -35,7 +35,7 @@ export function buildPreset({
       formId: null,
       stepOrder: null,
       projectId: target.projectId,
-    };
+    }
   }
   return {
     id: uuid(),
@@ -49,36 +49,37 @@ export function buildPreset({
     formId: target.formId,
     stepOrder: target.stepOrder,
     projectId: null,
-  };
+  }
 }
 
 export function newProject(name: string): Project {
-  const now = Date.now();
-  return { id: uuid(), name, createdAt: now, updatedAt: now };
+  const now = Date.now()
+  return { id: uuid(), name, createdAt: now, updatedAt: now }
 }
 
 export function newForm(label: string, projectId: string | null): FormDef {
-  const now = Date.now();
+  const now = Date.now()
   return {
     id: uuid(),
     label,
     projectId,
     createdAt: now,
     updatedAt: now,
-  };
+  }
 }
 
 export function stepCountsByForm(presets: Preset[]): Record<string, number> {
-  const out: Record<string, number> = {};
+  const out: Record<string, number> = {}
   for (const p of presets) {
-    if (p.formId) out[p.formId] = (out[p.formId] ?? 0) + 1;
+    if (p.formId)
+      out[p.formId] = (out[p.formId] ?? 0) + 1
   }
-  return out;
+  return out
 }
 
 export function projectIdFor(preset: Preset, forms: FormDef[]): string | null {
   if (preset.formId) {
-    return forms.find((f) => f.id === preset.formId)?.projectId ?? null;
+    return forms.find(f => f.id === preset.formId)?.projectId ?? null
   }
-  return preset.projectId;
+  return preset.projectId
 }

@@ -1,29 +1,30 @@
-import {
-  upsertForm,
-  upsertPreset,
-  upsertProject,
-} from '../../shared/storage';
 import type {
   CaptureResult,
   FormDef,
   Preset,
   Project,
-} from '../../shared/types';
+} from '../../shared/types'
+import type { SavePayload } from '../../ui/SaveForm'
+import {
+  upsertForm,
+  upsertPreset,
+  upsertProject,
+} from '../../shared/storage'
 import {
   buildPreset,
   newForm,
   newProject,
   stepCountsByForm,
-} from '../../ui/preset-helpers';
-import { SaveForm, type SavePayload } from '../../ui/SaveForm';
+} from '../../ui/preset-helpers'
+import { SaveForm } from '../../ui/SaveForm'
 
 interface Props {
-  snapshot: CaptureResult;
-  projects: Project[];
-  forms: FormDef[];
-  presets: Preset[];
-  onSaved: (preset: Preset) => void;
-  onCancel: () => void;
+  snapshot: CaptureResult
+  projects: Project[]
+  forms: FormDef[]
+  presets: Preset[]
+  onSaved: (preset: Preset) => void
+  onCancel: () => void
 }
 
 export function InlineSavePanel({
@@ -35,17 +36,17 @@ export function InlineSavePanel({
   onCancel,
 }: Props) {
   async function createProject(name: string): Promise<Project> {
-    const p = newProject(name);
-    await upsertProject(p);
-    return p;
+    const p = newProject(name)
+    await upsertProject(p)
+    return p
   }
   async function createForm(
     label: string,
     projectId: string | null,
   ): Promise<FormDef> {
-    const f = newForm(label, projectId);
-    await upsertForm(f);
-    return f;
+    const f = newForm(label, projectId)
+    await upsertForm(f)
+    return f
   }
   async function handleSave(payload: SavePayload) {
     const preset = buildPreset({
@@ -54,9 +55,9 @@ export function InlineSavePanel({
       fields: snapshot.fields,
       page: snapshot,
       existingPresets: presets,
-    });
-    await upsertPreset(preset);
-    onSaved(preset);
+    })
+    await upsertPreset(preset)
+    onSaved(preset)
   }
 
   return (
@@ -85,5 +86,5 @@ export function InlineSavePanel({
         onCreateForm={createForm}
       />
     </div>
-  );
+  )
 }

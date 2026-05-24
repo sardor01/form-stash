@@ -1,8 +1,8 @@
-import type { FieldSnapshot, Settings } from '../../shared/types';
-import { delay, queryAllDeep } from '../dom-utils';
-import { dispatchInputEvents, setNativeValue } from './native-value';
+import type { FieldSnapshot, Settings } from '../../shared/types'
+import { delay, queryAllDeep } from '../dom-utils'
+import { dispatchInputEvents, setNativeValue } from './native-value'
 
-const POLL_INTERVAL = 50;
+const POLL_INTERVAL = 50
 
 export async function writeCustomWidget(
   el: Element,
@@ -10,51 +10,52 @@ export async function writeCustomWidget(
   settings: Settings,
   root: Document | Element | ShadowRoot,
 ): Promise<'filled' | 'partial' | 'failed'> {
-  const role = el.getAttribute('role');
+  const role = el.getAttribute('role')
 
   if (role === 'switch' || role === 'checkbox') {
-    const desired = snap.value === true || snap.value === 'true';
-    const current = el.getAttribute('aria-checked') === 'true';
-    if (current !== desired) (el as HTMLElement).click();
-    return 'filled';
+    const desired = snap.value === true || snap.value === 'true'
+    const current = el.getAttribute('aria-checked') === 'true'
+    if (current !== desired)
+      (el as HTMLElement).click()
+    return 'filled'
   }
 
-  const hiddenSelector = el.getAttribute('aria-controls');
+  const hiddenSelector = el.getAttribute('aria-controls')
   if (snap.underlyingValue != null && hiddenSelector) {
-    const hidden = document.getElementById(hiddenSelector);
+    const hidden = document.getElementById(hiddenSelector)
     if (
-      hidden instanceof HTMLInputElement ||
-      hidden instanceof HTMLSelectElement
+      hidden instanceof HTMLInputElement
+      || hidden instanceof HTMLSelectElement
     ) {
-      setNativeValue(hidden, snap.underlyingValue);
-      dispatchInputEvents(hidden, { blur: settings.fillEventBlur });
-      return 'filled';
+      setNativeValue(hidden, snap.underlyingValue)
+      dispatchInputEvents(hidden, { blur: settings.fillEventBlur })
+      return 'filled'
     }
   }
 
   if (role === 'spinbutton') {
-    const target = String(snap.value ?? '');
+    const target = String(snap.value ?? '')
     if (el instanceof HTMLInputElement) {
-      setNativeValue(el, target);
-      dispatchInputEvents(el, { blur: settings.fillEventBlur });
-      return 'filled';
+      setNativeValue(el, target)
+      dispatchInputEvents(el, { blur: settings.fillEventBlur })
+      return 'filled'
     }
     el.setAttribute('aria-valuenow', target);
     (el as HTMLElement).dispatchEvent(
       new Event('change', { bubbles: true }),
-    );
-    return 'filled';
+    )
+    return 'filled'
   }
 
   if (role === 'slider') {
     if (el instanceof HTMLInputElement) {
-      setNativeValue(el, String(snap.value ?? ''));
-      dispatchInputEvents(el, { blur: settings.fillEventBlur });
-      return 'filled';
+      setNativeValue(el, String(snap.value ?? ''))
+      dispatchInputEvents(el, { blur: settings.fillEventBlur })
+      return 'filled'
     }
   }
 
-  return interactionReplay(el, snap, settings, root);
+  return interactionReplay(el, snap, settings, root)
 }
 
 async function interactionReplay(
@@ -63,22 +64,23 @@ async function interactionReplay(
   settings: Settings,
   root: Document | Element | ShadowRoot,
 ): Promise<'filled' | 'partial' | 'failed'> {
-  const desiredLabel = snap.visibleLabel ?? String(snap.value ?? '');
-  if (!desiredLabel) return 'failed';
+  const desiredLabel = snap.visibleLabel ?? String(snap.value ?? '')
+  if (!desiredLabel)
+    return 'failed';
 
-  (trigger as HTMLElement).click();
+  (trigger as HTMLElement).click()
 
-  const deadline = Date.now() + settings.perFieldTimeoutMs;
+  const deadline = Date.now() + settings.perFieldTimeoutMs
   while (Date.now() < deadline) {
-    const option = findOptionByText(root, desiredLabel);
+    const option = findOptionByText(root, desiredLabel)
     if (option) {
-      (option as HTMLElement).click();
-      return 'filled';
+      (option as HTMLElement).click()
+      return 'filled'
     }
-    await delay(POLL_INTERVAL);
+    await delay(POLL_INTERVAL)
   }
-  (trigger as HTMLElement).blur?.();
-  return 'failed';
+  (trigger as HTMLElement).blur?.()
+  return 'failed'
 }
 
 function findOptionByText(
@@ -88,12 +90,12 @@ function findOptionByText(
   const candidates = queryAllDeep(
     root,
     '[role=option], [role=menuitem], [role=treeitem], li[data-value]',
-  );
-  const lower = text.trim().toLowerCase();
+  )
+  const lower = text.trim().toLowerCase()
   return (
     candidates.find((c) => {
-      const t = (c.textContent ?? '').trim().toLowerCase();
-      return t === lower || t.includes(lower);
+      const t = (c.textContent ?? '').trim().toLowerCase()
+      return t === lower || t.includes(lower)
     }) ?? null
-  );
+  )
 }

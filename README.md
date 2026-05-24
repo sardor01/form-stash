@@ -98,7 +98,7 @@ Open the side panel → **☁️ Cloud sync**:
 2. Paste the **Google OAuth Client ID**.
 3. Tick **Enable sync**.
 4. Click **Sign in with Google**.
-5. Enter the **encryption passphrase**. Use the *same* passphrase on
+5. Enter the **encryption passphrase**. Use the _same_ passphrase on
    every profile that should share data — Cloudflare only stores the
    ciphertext; the passphrase is what unlocks it locally.
 

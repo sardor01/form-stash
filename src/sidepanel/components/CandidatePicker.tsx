@@ -1,9 +1,9 @@
-import type { CandidateForm } from '../../shared/types';
+import type { CandidateForm } from '../../shared/types'
 
 interface Props {
-  candidates: CandidateForm[];
-  onPick: (index: number | undefined) => void;
-  onCancel: () => void;
+  candidates: CandidateForm[]
+  onPick: (index: number | undefined) => void
+  onCancel: () => void
 }
 
 export function CandidatePicker({ candidates, onPick, onCancel }: Props) {
@@ -13,7 +13,7 @@ export function CandidatePicker({ candidates, onPick, onCancel }: Props) {
         Multiple forms found — pick one
       </div>
       <ul className="flex flex-col gap-1">
-        {candidates.map((c) => (
+        {candidates.map(c => (
           <li key={c.index}>
             <button
               type="button"
@@ -33,5 +33,5 @@ export function CandidatePicker({ candidates, onPick, onCancel }: Props) {
         Cancel
       </button>
     </div>
-  );
+  )
 }

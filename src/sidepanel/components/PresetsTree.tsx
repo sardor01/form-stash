@@ -1,37 +1,37 @@
-import { useMemo, useState } from 'react';
 import type {
   FormDef,
   PageInfo,
   Preset,
   Project,
-} from '../../shared/types';
-import { projectIdFor } from '../../ui/preset-helpers';
-import type { ProjectFilterValue } from './ProjectFilter';
+} from '../../shared/types'
+import type { ProjectFilterValue } from './ProjectFilter'
+import { useMemo, useState } from 'react'
+import { projectIdFor } from '../../ui/preset-helpers'
 
 interface Props {
-  projects: Project[];
-  forms: FormDef[];
-  presets: Preset[];
-  pageInfo: PageInfo | null;
-  search: string;
-  projectFilter: ProjectFilterValue;
-  onApply: (preset: Preset) => void;
-  onEdit: (preset: Preset) => void;
-  onDuplicate: (preset: Preset) => void;
-  onDelete: (preset: Preset) => void;
-  onRecapture: (preset: Preset) => void;
-  onRenameForm: (form: FormDef) => void;
-  onDeleteForm: (form: FormDef) => void;
-  onAddStepFromCurrentPage: (form: FormDef) => void;
-  onMoveStepUp: (preset: Preset) => void;
-  onMoveStepDown: (preset: Preset) => void;
+  projects: Project[]
+  forms: FormDef[]
+  presets: Preset[]
+  pageInfo: PageInfo | null
+  search: string
+  projectFilter: ProjectFilterValue
+  onApply: (preset: Preset) => void
+  onEdit: (preset: Preset) => void
+  onDuplicate: (preset: Preset) => void
+  onDelete: (preset: Preset) => void
+  onRecapture: (preset: Preset) => void
+  onRenameForm: (form: FormDef) => void
+  onDeleteForm: (form: FormDef) => void
+  onAddStepFromCurrentPage: (form: FormDef) => void
+  onMoveStepUp: (preset: Preset) => void
+  onMoveStepDown: (preset: Preset) => void
 }
 
 interface Group {
-  projectId: string | null;
-  projectLabel: string;
-  forms: { form: FormDef; steps: Preset[] }[];
-  standalone: Preset[];
+  projectId: string | null
+  projectLabel: string
+  forms: { form: FormDef, steps: Preset[] }[]
+  standalone: Preset[]
 }
 
 export function PresetsTree(props: Props) {
@@ -52,17 +52,17 @@ export function PresetsTree(props: Props) {
     onAddStepFromCurrentPage,
     onMoveStepUp,
     onMoveStepDown,
-  } = props;
+  } = props
 
   const groups = useMemo(
     () => groupPresets(projects, forms, presets),
     [projects, forms, presets],
-  );
+  )
 
   const filtered = useMemo(
     () => filterGroups(groups, search.trim().toLowerCase(), projectFilter),
     [groups, search, projectFilter],
-  );
+  )
 
   return (
     <div className="flex flex-col gap-2">
@@ -71,7 +71,7 @@ export function PresetsTree(props: Props) {
           No presets match your filter.
         </div>
       )}
-      {filtered.map((group) => (
+      {filtered.map(group => (
         <GroupSection
           key={group.projectId ?? '__none__'}
           group={group}
@@ -89,11 +89,11 @@ export function PresetsTree(props: Props) {
         />
       ))}
     </div>
-  );
+  )
 }
 
 interface GroupSectionProps extends Omit<Props, 'projects' | 'forms' | 'presets' | 'search' | 'projectFilter'> {
-  group: Group;
+  group: Group
 }
 
 function GroupSection({
@@ -110,10 +110,10 @@ function GroupSection({
   onMoveStepUp,
   onMoveStepDown,
 }: GroupSectionProps) {
-  const [expanded, setExpanded] = useState(true);
-  const hasMatch = group.forms.some((f) =>
-    f.steps.some((s) => matchesPage(s, pageInfo)),
-  ) || group.standalone.some((p) => matchesPage(p, pageInfo));
+  const [expanded, setExpanded] = useState(true)
+  const hasMatch = group.forms.some(f =>
+    f.steps.some(s => matchesPage(s, pageInfo)),
+  ) || group.standalone.some(p => matchesPage(p, pageInfo))
 
   return (
     <div
@@ -122,7 +122,7 @@ function GroupSection({
       <button
         type="button"
         className="w-full text-left px-2 py-1.5 text-xs uppercase tracking-wide text-slate-500 hover:bg-slate-50 flex items-center gap-1.5"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setExpanded(v => !v)}
       >
         <span>{expanded ? '▾' : '▸'}</span>
         <span className="font-semibold">{group.projectLabel}</span>
@@ -147,7 +147,7 @@ function GroupSection({
               onMoveStepDown={onMoveStepDown}
             />
           ))}
-          {group.standalone.map((preset) => (
+          {group.standalone.map(preset => (
             <PresetRow
               key={preset.id}
               preset={preset}
@@ -165,23 +165,23 @@ function GroupSection({
         </div>
       )}
     </div>
-  );
+  )
 }
 
 interface FormBlockProps {
-  form: FormDef;
-  steps: Preset[];
-  pageInfo: PageInfo | null;
-  onApply: (preset: Preset) => void;
-  onEdit: (preset: Preset) => void;
-  onDuplicate: (preset: Preset) => void;
-  onDelete: (preset: Preset) => void;
-  onRecapture: (preset: Preset) => void;
-  onRenameForm: (form: FormDef) => void;
-  onDeleteForm: (form: FormDef) => void;
-  onAddStepFromCurrentPage: (form: FormDef) => void;
-  onMoveStepUp: (preset: Preset) => void;
-  onMoveStepDown: (preset: Preset) => void;
+  form: FormDef
+  steps: Preset[]
+  pageInfo: PageInfo | null
+  onApply: (preset: Preset) => void
+  onEdit: (preset: Preset) => void
+  onDuplicate: (preset: Preset) => void
+  onDelete: (preset: Preset) => void
+  onRecapture: (preset: Preset) => void
+  onRenameForm: (form: FormDef) => void
+  onDeleteForm: (form: FormDef) => void
+  onAddStepFromCurrentPage: (form: FormDef) => void
+  onMoveStepUp: (preset: Preset) => void
+  onMoveStepDown: (preset: Preset) => void
 }
 
 function FormBlock({
@@ -199,8 +199,8 @@ function FormBlock({
   onMoveStepUp,
   onMoveStepDown,
 }: FormBlockProps) {
-  const [expanded, setExpanded] = useState(true);
-  const hasMatch = steps.some((s) => matchesPage(s, pageInfo));
+  const [expanded, setExpanded] = useState(true)
+  const hasMatch = steps.some(s => matchesPage(s, pageInfo))
 
   return (
     <div
@@ -210,7 +210,7 @@ function FormBlock({
         <button
           type="button"
           className="text-slate-500"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => setExpanded(v => !v)}
           aria-label="Toggle form"
         >
           {expanded ? '▾' : '▸'}
@@ -219,7 +219,10 @@ function FormBlock({
           {form.label}
         </div>
         <span className="text-xs text-slate-500">
-          {steps.length} step{steps.length === 1 ? '' : 's'}
+          {steps.length}
+          {' '}
+          step
+          {steps.length === 1 ? '' : 's'}
         </span>
         <div className="flex gap-1">
           <IconButton
@@ -260,7 +263,7 @@ function FormBlock({
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function PresetRow({
@@ -272,15 +275,15 @@ function PresetRow({
   onDelete,
   onRecapture,
 }: {
-  preset: Preset;
-  pageInfo: PageInfo | null;
-  onApply: (p: Preset) => void;
-  onEdit: (p: Preset) => void;
-  onDuplicate: (p: Preset) => void;
-  onDelete: (p: Preset) => void;
-  onRecapture: (p: Preset) => void;
+  preset: Preset
+  pageInfo: PageInfo | null
+  onApply: (p: Preset) => void
+  onEdit: (p: Preset) => void
+  onDuplicate: (p: Preset) => void
+  onDelete: (p: Preset) => void
+  onRecapture: (p: Preset) => void
 }) {
-  const matches = matchesPage(preset, pageInfo);
+  const matches = matchesPage(preset, pageInfo)
   return (
     <div
       className={`flex items-center gap-2 px-2 py-1.5 rounded border ${matches ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}
@@ -295,7 +298,13 @@ function PresetRow({
           )}
         </div>
         <div className="text-[11px] text-slate-500 truncate" title={preset.url}>
-          {preset.fields.length} field{preset.fields.length === 1 ? '' : 's'} ·{' '}
+          {preset.fields.length}
+          {' '}
+          field
+          {preset.fields.length === 1 ? '' : 's'}
+          {' '}
+          ·
+          {' '}
           {preset.path || preset.url}
         </div>
       </div>
@@ -315,7 +324,7 @@ function PresetRow({
         </MenuItem>
       </RowMenu>
     </div>
-  );
+  )
 }
 
 function StepRow({
@@ -331,25 +340,26 @@ function StepRow({
   onMoveUp,
   onMoveDown,
 }: {
-  step: Preset;
-  index: number;
-  total: number;
-  pageInfo: PageInfo | null;
-  onApply: (p: Preset) => void;
-  onEdit: (p: Preset) => void;
-  onDuplicate: (p: Preset) => void;
-  onDelete: (p: Preset) => void;
-  onRecapture: (p: Preset) => void;
-  onMoveUp: (p: Preset) => void;
-  onMoveDown: (p: Preset) => void;
+  step: Preset
+  index: number
+  total: number
+  pageInfo: PageInfo | null
+  onApply: (p: Preset) => void
+  onEdit: (p: Preset) => void
+  onDuplicate: (p: Preset) => void
+  onDelete: (p: Preset) => void
+  onRecapture: (p: Preset) => void
+  onMoveUp: (p: Preset) => void
+  onMoveDown: (p: Preset) => void
 }) {
-  const matches = matchesPage(step, pageInfo);
+  const matches = matchesPage(step, pageInfo)
   return (
     <div
       className={`flex items-center gap-2 px-2 py-1.5 rounded border ${matches ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}
     >
       <span className="text-xs text-slate-500 w-6 shrink-0">
-        {step.stepOrder ?? index + 1}.
+        {step.stepOrder ?? index + 1}
+        .
       </span>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate" title={step.label}>
@@ -361,7 +371,13 @@ function StepRow({
           )}
         </div>
         <div className="text-[11px] text-slate-500 truncate" title={step.url}>
-          {step.fields.length} field{step.fields.length === 1 ? '' : 's'} ·{' '}
+          {step.fields.length}
+          {' '}
+          field
+          {step.fields.length === 1 ? '' : 's'}
+          {' '}
+          ·
+          {' '}
           {step.path || step.url}
         </div>
       </div>
@@ -401,7 +417,7 @@ function StepRow({
         </MenuItem>
       </RowMenu>
     </div>
-  );
+  )
 }
 
 function IconButton({
@@ -409,9 +425,9 @@ function IconButton({
   label,
   onClick,
 }: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
+  children: React.ReactNode
+  label: string
+  onClick: () => void
 }) {
   return (
     <button
@@ -423,17 +439,17 @@ function IconButton({
     >
       {children}
     </button>
-  );
+  )
 }
 
 function RowMenu({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
   return (
     <div className="relative">
       <button
         type="button"
         className="text-slate-500 px-1 hover:text-slate-800"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(v => !v)}
         aria-label="More actions"
       >
         ⋯
@@ -447,7 +463,7 @@ function RowMenu({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function MenuItem({
@@ -455,9 +471,9 @@ function MenuItem({
   onClick,
   danger,
 }: {
-  children: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
+  children: React.ReactNode
+  onClick: () => void
+  danger?: boolean
 }) {
   return (
     <button
@@ -467,12 +483,13 @@ function MenuItem({
     >
       {children}
     </button>
-  );
+  )
 }
 
 function matchesPage(preset: Preset, pageInfo: PageInfo | null): boolean {
-  if (!pageInfo) return false;
-  return preset.origin === pageInfo.origin && preset.path === pageInfo.path;
+  if (!pageInfo)
+    return false
+  return preset.origin === pageInfo.origin && preset.path === pageInfo.path
 }
 
 function groupPresets(
@@ -480,39 +497,41 @@ function groupPresets(
   forms: FormDef[],
   presets: Preset[],
 ): Group[] {
-  const out: Group[] = [];
-  const projectsMap = new Map(projects.map((p) => [p.id, p]));
+  const out: Group[] = []
+  const projectsMap = new Map(projects.map(p => [p.id, p]))
 
-  const projectIds = new Set<string | null>();
-  projects.forEach((p) => projectIds.add(p.id));
-  forms.forEach((f) => projectIds.add(f.projectId));
-  presets.forEach((p) => projectIds.add(projectIdFor(p, forms)));
+  const projectIds = new Set<string | null>()
+  projects.forEach(p => projectIds.add(p.id))
+  forms.forEach(f => projectIds.add(f.projectId))
+  presets.forEach(p => projectIds.add(projectIdFor(p, forms)))
 
   const sortedProjectIds = [...projectIds].sort((a, b) => {
-    if (a === null) return 1;
-    if (b === null) return -1;
-    const na = projectsMap.get(a)?.name ?? '';
-    const nb = projectsMap.get(b)?.name ?? '';
-    return na.localeCompare(nb);
-  });
+    if (a === null)
+      return 1
+    if (b === null)
+      return -1
+    const na = projectsMap.get(a)?.name ?? ''
+    const nb = projectsMap.get(b)?.name ?? ''
+    return na.localeCompare(nb)
+  })
 
   for (const projectId of sortedProjectIds) {
     const formsInProject = forms
-      .filter((f) => f.projectId === projectId)
-      .map((form) => ({
+      .filter(f => f.projectId === projectId)
+      .map(form => ({
         form,
         steps: presets
-          .filter((p) => p.formId === form.id)
+          .filter(p => p.formId === form.id)
           .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0)),
       }))
-      .sort((a, b) => a.form.label.localeCompare(b.form.label));
+      .sort((a, b) => a.form.label.localeCompare(b.form.label))
 
     const standaloneInProject = presets
-      .filter((p) => p.formId === null && p.projectId === projectId)
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+      .filter(p => p.formId === null && p.projectId === projectId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
 
     if (formsInProject.length === 0 && standaloneInProject.length === 0) {
-      continue;
+      continue
     }
 
     out.push({
@@ -523,10 +542,10 @@ function groupPresets(
           : (projectsMap.get(projectId)?.name ?? 'Unknown project'),
       forms: formsInProject,
       standalone: standaloneInProject,
-    });
+    })
   }
 
-  return out;
+  return out
 }
 
 function filterGroups(
@@ -536,41 +555,45 @@ function filterGroups(
 ): Group[] {
   return groups
     .filter((g) => {
-      if (projectFilter === 'all') return true;
-      if (projectFilter === 'none') return g.projectId === null;
-      return g.projectId === projectFilter;
+      if (projectFilter === 'all')
+        return true
+      if (projectFilter === 'none')
+        return g.projectId === null
+      return g.projectId === projectFilter
     })
-    .map((g) => filterGroup(g, search))
+    .map(g => filterGroup(g, search))
     .filter(
-      (g) => g.forms.length > 0 || g.standalone.length > 0,
-    );
+      g => g.forms.length > 0 || g.standalone.length > 0,
+    )
 }
 
 function filterGroup(g: Group, search: string): Group {
-  if (!search) return g;
-  const matches = (text: string) => text.toLowerCase().includes(search);
-  const groupMatches = matches(g.projectLabel);
+  if (!search)
+    return g
+  const matches = (text: string) => text.toLowerCase().includes(search)
+  const groupMatches = matches(g.projectLabel)
   const forms = g.forms
     .map((entry) => {
-      const formMatches = matches(entry.form.label);
+      const formMatches = matches(entry.form.label)
       const steps = entry.steps.filter(
-        (s) =>
-          groupMatches ||
-          formMatches ||
-          matches(s.label) ||
-          matches(s.path),
-      );
-      if (formMatches && steps.length === 0) return { ...entry, steps };
-      return { ...entry, steps };
+        s =>
+          groupMatches
+          || formMatches
+          || matches(s.label)
+          || matches(s.path),
+      )
+      if (formMatches && steps.length === 0)
+        return { ...entry, steps }
+      return { ...entry, steps }
     })
     .filter(
-      (entry) =>
-        groupMatches ||
-        matches(entry.form.label) ||
-        entry.steps.length > 0,
-    );
+      entry =>
+        groupMatches
+        || matches(entry.form.label)
+        || entry.steps.length > 0,
+    )
   const standalone = g.standalone.filter(
-    (p) => groupMatches || matches(p.label) || matches(p.path),
-  );
-  return { ...g, forms, standalone };
+    p => groupMatches || matches(p.label) || matches(p.path),
+  )
+  return { ...g, forms, standalone }
 }

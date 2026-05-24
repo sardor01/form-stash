@@ -3,14 +3,14 @@ import type {
   FillReport,
   PageInfo,
   Preset,
-} from './types';
+} from './types'
 
-export type Message =
-  | { kind: 'CAPTURE_NOW'; candidateIndex?: number }
-  | { kind: 'GET_CANDIDATES' }
-  | { kind: 'APPLY_PRESET'; preset: Preset }
-  | { kind: 'GET_PAGE_INFO' }
-  | { kind: 'PING' };
+export type Message
+  = | { kind: 'CAPTURE_NOW', candidateIndex?: number }
+    | { kind: 'GET_CANDIDATES' }
+    | { kind: 'APPLY_PRESET', preset: Preset }
+    | { kind: 'GET_PAGE_INFO' }
+    | { kind: 'PING' }
 
 export type MessageResponse<M extends Message['kind']> = M extends 'CAPTURE_NOW'
   ? CaptureResult
@@ -22,7 +22,7 @@ export type MessageResponse<M extends Message['kind']> = M extends 'CAPTURE_NOW'
         ? PageInfo
         : M extends 'PING'
           ? { ok: true }
-          : never;
+          : never
 
 export async function sendToTab<M extends Message>(
   tabId: number,
@@ -30,12 +30,12 @@ export async function sendToTab<M extends Message>(
 ): Promise<MessageResponse<M['kind']>> {
   return (await browser.tabs.sendMessage(tabId, message)) as MessageResponse<
     M['kind']
-  >;
+  >
 }
 
-export type ActiveTab = Browser.tabs.Tab;
+export type ActiveTab = Browser.tabs.Tab
 
 export async function getActiveTab(): Promise<ActiveTab | null> {
-  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-  return tabs[0] ?? null;
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true })
+  return tabs[0] ?? null
 }

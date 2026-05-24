@@ -1,6 +1,6 @@
 interface Props {
-  onClick: () => void;
-  busy?: boolean;
+  onClick: () => void
+  busy?: boolean
 }
 
 export function CaptureButton({ onClick, busy }: Props) {
@@ -14,5 +14,5 @@ export function CaptureButton({ onClick, busy }: Props) {
       <span aria-hidden="true">📸</span>
       <span>{busy ? 'Capturing…' : 'Capture this page'}</span>
     </button>
-  );
+  )
 }

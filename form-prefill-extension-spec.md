@@ -42,17 +42,19 @@ Project            (workspace grouping, optional — for filtering)
 There are **two ways to trigger a capture**; both produce a field snapshot (§6) that flows
 into the **same save form** (step 3 below).
 
-**A. Auto, on submit** *(can be disabled via `settings.autoPromptOnSubmit`)*
+**A. Auto, on submit** _(can be disabled via `settings.autoPromptOnSubmit`)_
+
 1. User fills the form and clicks its submit button (`button[type=submit]`,
    `input[type=submit]`, or a `<button>` with no explicit type inside a `<form>`), or
-   presses Enter. The capture-phase listener fires *before* the app's handlers and
+   presses Enter. The capture-phase listener fires _before_ the app's handlers and
    **synchronously snapshots** all detected fields in the **owning form** (the `<form>`
    that contains the button); if there's no `<form>`, a configured container / the document.
 2. An in-page modal appears: **"Save these N field values as a preset?"** → `[Save]` `[Dismiss]`.
    - The original submit is **NOT blocked by default** (app validation/handlers run as
      normal during testing). Setting `preventSubmitOnCapture` flips this.
 
-**B. Manual, from the side panel** *(works any time, no submit needed)*
+**B. Manual, from the side panel** _(works any time, no submit needed)_
+
 1. User opens the side panel and clicks **"📸 Capture this page"**.
 2. The panel messages the active tab's content script (`CAPTURE_NOW`), which snapshots
    the page and returns the result. **Target resolution:**
@@ -64,17 +66,19 @@ into the **same save form** (step 3 below).
      region).
 3. The save form (below) opens **inline in the side panel** with the captured count.
 
-**Shared save form** (used by both A's modal and B's panel):
-3. Collect:
-   - **Label** (free text, required) — e.g. "Shipper details".
-   - **Save as**: `○ Standalone preset` or `○ Step of a form`.
-   - If **Step of a form**: pick an existing **Form** or "➕ Create new form…" (with a
-     form label), and a **Step #** (auto-filled with the next index for that form, editable).
-     The step inherits the Form's project.
-   - If **Standalone**: pick a **Project** (dropdown + "➕ Create new project…" inline).
+**Shared save form** (used by both A's modal and B's panel): 3. Collect:
+
+- **Label** (free text, required) — e.g. "Shipper details".
+- **Save as**: `○ Standalone preset` or `○ Step of a form`.
+- If **Step of a form**: pick an existing **Form** or "➕ Create new form…" (with a
+  form label), and a **Step #** (auto-filled with the next index for that form, editable).
+  The step inherits the Form's project.
+- If **Standalone**: pick a **Project** (dropdown + "➕ Create new project…" inline).
+
 4. Save writes to `chrome.storage.local`; a confirmation toast shows.
 
 ### 3.2 Replay (pre-fill)
+
 1. User opens the form route and opens the extension **side panel**.
 2. Side panel shows the **presets tree** (see §11). Presets/steps whose stored URL/path
    match the current tab are surfaced at the top (non-blocking hint, not a hard filter) —
@@ -87,6 +91,7 @@ into the **same save form** (step 3 below).
    with the list of skipped/failed fields.
 
 ### 3.3 Manage
+
 - Create / rename / delete **projects**. Deleting a project prompts: delete its contents,
   or unassign them (move to "No project").
 - Create / rename / delete **forms**. Deleting a form prompts: delete its steps, or detach
@@ -100,12 +105,12 @@ into the **same save form** (step 3 below).
 
 ## 4. Architecture (Manifest V3)
 
-| Surface | Responsibility |
-|---|---|
+| Surface                                 | Responsibility                                                                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Content script** (`all_frames: true`) | Submit detection, field snapshot (on submit **and** on-demand via `CAPTURE_NOW`), form-target picker, in-page save modal, fill engine. Reads/writes `chrome.storage.local` directly. |
-| **Side panel** (`chrome.sidePanel`) | Main UI: **"Capture this page"** button + inline save form, presets tree, search, project/form filters, CRUD, Apply action, fill report. |
-| **Service worker** | Message routing between side panel and the active tab's content script; opens the side panel on toolbar click. Minimal logic. |
-| **Toolbar popup** *(optional)* | Quick launcher: "Open panel", quick-apply last-used preset for this page. |
+| **Side panel** (`chrome.sidePanel`)     | Main UI: **"Capture this page"** button + inline save form, presets tree, search, project/form filters, CRUD, Apply action, fill report.                                             |
+| **Service worker**                      | Message routing between side panel and the active tab's content script; opens the side panel on toolbar click. Minimal logic.                                                        |
+| **Toolbar popup** _(optional)_          | Quick launcher: "Open panel", quick-apply last-used preset for this page.                                                                                                            |
 
 `chrome.storage.local` is shared across all three contexts, so storage logic can live in
 a small shared module imported everywhere.
@@ -124,75 +129,75 @@ UI ergonomic.
 
 ```ts
 interface Project {
-  id: string;          // uuid
-  name: string;
-  createdAt: number;
-  updatedAt: number;   // bumped on edit; drives sync LWW merge
-  deletedAt?: number;  // tombstone for soft delete (so deletes can sync)
+  id: string // uuid
+  name: string
+  createdAt: number
+  updatedAt: number // bumped on edit; drives sync LWW merge
+  deletedAt?: number // tombstone for soft delete (so deletes can sync)
 }
 
-type FieldType =
-  | 'text' | 'textarea' | 'number' | 'email' | 'url' | 'tel' | 'password'
-  | 'select' | 'multiselect'
-  | 'checkbox' | 'radio'
-  | 'date' | 'datetime-local' | 'time' | 'month' | 'week'
-  | 'custom'           // Ark/Radix combobox, listbox, switch, etc.
-  | 'contenteditable'; // rich text / plain contenteditable
+type FieldType
+  = | 'text' | 'textarea' | 'number' | 'email' | 'url' | 'tel' | 'password'
+    | 'select' | 'multiselect'
+    | 'checkbox' | 'radio'
+    | 'date' | 'datetime-local' | 'time' | 'month' | 'week'
+    | 'custom' // Ark/Radix combobox, listbox, switch, etc.
+    | 'contenteditable' // rich text / plain contenteditable
 
 interface FieldSelector {
   // tried in order at replay time; first hit wins
-  name?: string;            // [name=...] scoped to form
-  id?: string;              // #id
-  testId?: string;          // [data-testid] / [data-test] / [data-cy]
-  ariaLabel?: string;       // aria-label or associated <label> text
-  cssPath?: string;         // generated relative CSS path within the form
+  name?: string // [name=...] scoped to form
+  id?: string // #id
+  testId?: string // [data-testid] / [data-test] / [data-cy]
+  ariaLabel?: string // aria-label or associated <label> text
+  cssPath?: string // generated relative CSS path within the form
 }
 
 interface FieldSnapshot {
-  selector: FieldSelector;
-  type: FieldType;
-  value: string | string[] | boolean | null;
+  selector: FieldSelector
+  type: FieldType
+  value: string | string[] | boolean | null
   // For custom widgets, store BOTH so the fill engine can pick a strategy:
-  visibleLabel?: string;    // human-readable option text (e.g. "United States")
-  underlyingValue?: string; // value of the hidden native control if one exists
-  inShadowRoot?: boolean;
+  visibleLabel?: string // human-readable option text (e.g. "United States")
+  underlyingValue?: string // value of the hidden native control if one exists
+  inShadowRoot?: boolean
 }
 
 interface Preset {
-  id: string;
-  label: string;            // step label ("Shipper details") or standalone label
-  url: string;              // full href at capture time
-  origin: string;           // scheme + host
-  path: string;             // pathname (for surfacing matches)
-  createdAt: number;
-  updatedAt: number;
-  deletedAt?: number;       // tombstone for soft delete
-  fields: FieldSnapshot[];
+  id: string
+  label: string // step label ("Shipper details") or standalone label
+  url: string // full href at capture time
+  origin: string // scheme + host
+  path: string // pathname (for surfacing matches)
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number // tombstone for soft delete
+  fields: FieldSnapshot[]
 
   // grouping — a preset is EITHER a step of a Form, OR standalone:
-  formId: string | null;    // set => this preset is a step of that Form
-  stepOrder: number | null; // 1-based order within the Form; null if standalone
-  projectId: string | null; // used only when standalone; steps inherit Form.projectId
+  formId: string | null // set => this preset is a step of that Form
+  stepOrder: number | null // 1-based order within the Form; null if standalone
+  projectId: string | null // used only when standalone; steps inherit Form.projectId
 }
 
-interface Form {            // "parent form" — a multi-step form
-  id: string;
-  label: string;            // e.g. "Truck Crate Booking"
-  projectId: string | null;
-  entryUrl?: string;        // optional base / first-step URL
-  createdAt: number;
-  updatedAt: number;
-  deletedAt?: number;       // tombstone for soft delete
+interface Form { // "parent form" — a multi-step form
+  id: string
+  label: string // e.g. "Truck Crate Booking"
+  projectId: string | null
+  entryUrl?: string // optional base / first-step URL
+  createdAt: number
+  updatedAt: number
+  deletedAt?: number // tombstone for soft delete
   // steps = Presets where formId === this.id and deletedAt == null,
   // ordered by stepOrder
 }
 
 interface Settings {
-  autoPromptOnSubmit: boolean;     // default true — show the save modal on submit
-  preventSubmitOnCapture: boolean; // default false
-  capturePasswords: boolean;       // default false
-  fillEventBlur: boolean;          // dispatch blur after fill (default true)
-  perFieldTimeoutMs: number;       // default 3000
+  autoPromptOnSubmit: boolean // default true — show the save modal on submit
+  preventSubmitOnCapture: boolean // default false
+  capturePasswords: boolean // default false
+  fillEventBlur: boolean // dispatch blur after fill (default true)
+  perFieldTimeoutMs: number // default 3000
 }
 ```
 
@@ -230,9 +235,10 @@ For each element build a `FieldSelector` with **all** available identifiers (so 
 fall back):
 
 1. `name` (scoped to form) → 2. `id` → 3. `data-testid` / `data-test` / `data-cy` →
-4. `aria-label` or associated `<label for>` text → 5. generated relative CSS path.
+2. `aria-label` or associated `<label for>` text → 5. generated relative CSS path.
 
 Reading values:
+
 - text/number/textarea/select-single: `el.value`.
 - select-multiple: array of selected option values.
 - checkbox/switch: `el.checked` / `aria-checked`.
@@ -249,40 +255,48 @@ Setting `el.value = x` does **not** update React/Vue controlled state and the va
 reverts on the next render. The fill engine must use native setters + dispatched events.
 
 ### 7.1 Standard text / number / textarea / select
+
 ```ts
 function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
-  const proto = Object.getPrototypeOf(el);
-  const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-  const ownSetter   = Object.getOwnPropertyDescriptor(el, 'value')?.set;
+  const proto = Object.getPrototypeOf(el)
+  const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+  const ownSetter = Object.getOwnPropertyDescriptor(el, 'value')?.set
   // Bypass React's value tracker by using the prototype setter
-  if (ownSetter && ownSetter !== protoSetter && protoSetter) protoSetter.call(el, value);
-  else if (protoSetter) protoSetter.call(el, value);
-  else (el as any).value = value;
+  if (ownSetter && ownSetter !== protoSetter && protoSetter)
+    protoSetter.call(el, value)
+  else if (protoSetter)
+    protoSetter.call(el, value)
+  else (el as any).value = value
 }
 
 function fillInput(el: HTMLElement, value: string, blur = true) {
-  setNativeValue(el as HTMLInputElement, value);
-  el.dispatchEvent(new Event('input',  { bubbles: true }));  // React listens here
-  el.dispatchEvent(new Event('change', { bubbles: true }));  // Vue v-model / native change
-  if (blur) el.dispatchEvent(new Event('blur', { bubbles: true })); // many validators fire on blur
+  setNativeValue(el as HTMLInputElement, value)
+  el.dispatchEvent(new Event('input', { bubbles: true })) // React listens here
+  el.dispatchEvent(new Event('change', { bubbles: true })) // Vue v-model / native change
+  if (blur)
+    el.dispatchEvent(new Event('blur', { bubbles: true })) // many validators fire on blur
 }
 ```
+
 > The native-setter trick works from the content-script isolated world because the DOM
 > (and its prototypes) are shared with the page. Dispatched bubbling events reach React's
 > root delegated listener and Vue's handlers. Only use `chrome.scripting` with
 > `world: "MAIN"` if a specific case genuinely needs page-world JS (rare).
 
 ### 7.2 checkbox / radio / switch
+
 Compare desired vs current; if different, prefer `el.click()` (most reliable for
 controlled components), else set `.checked` via the prototype setter + dispatch
 `click`/`change`. For ARIA switches/checkboxes that are `<button role=switch>`, compare
 `aria-checked` and `.click()` if it needs to toggle.
 
 ### 7.3 `<select>`
+
 `setNativeValue(select, value)` then dispatch `change`. For multi-select, set
 `option.selected` on each matching option, then dispatch `change`.
 
 ### 7.4 Custom widgets (Ark UI / Radix UI / shadcn) — two strategies
+
 1. **Hidden-control-first (preferred):** these libs usually render a hidden native
    `<select>` or `<input>` that carries the form value. If found via the stored selector,
    fill it like §7.1/§7.3. Fastest and most robust.
@@ -295,6 +309,7 @@ Capture stores both `underlyingValue` and `visibleLabel` so the engine can attem
 then (2).
 
 ### 7.5 Date / time
+
 - Native `input[type=date|datetime-local|time|month|week]`: §7.1 with the correct format
   (`date` → `YYYY-MM-DD`, `time` → `HH:mm`, etc.).
 - Custom pickers (react-datepicker, etc.): they are usually a text input → type the
@@ -302,6 +317,7 @@ then (2).
   interaction replay.
 
 ### 7.6 Rich text / contenteditable
+
 - Plain contenteditable: `el.focus()`, set content, dispatch `input` (bubbles).
 - Managed editors (ProseMirror/TipTap, Slate, Lexical, Quill) overwrite raw innerHTML
   from their internal model, so prefer:
@@ -330,6 +346,7 @@ then (2).
 ## 9. Replay (fill) engine
 
 For each `FieldSnapshot`:
+
 1. Resolve the element by trying `selector` identifiers in order (§6), piercing open
    shadow roots.
 2. If not present yet, wait up to `perFieldTimeoutMs` (MutationObserver, fallback to poll).
@@ -395,6 +412,7 @@ standalone presets directly under their project:
   report inline (filled / not-found / skipped with the field list).
 
 **Projects & Forms management** — add / rename / delete for both. Delete prompts:
+
 - Project → `Delete contents` / `Move contents to No project` / `Cancel`.
 - Form → `Delete steps` / `Detach steps as standalone presets` / `Cancel`.
 
@@ -412,9 +430,9 @@ high z-index, shadow-DOM-isolated styling so the host page CSS can't bleed in.
   "name": "Form Prefill & Replay",
   "permissions": [
     "storage", "scripting", "activeTab", "sidePanel", "unlimitedStorage",
-    "alarms", "identity"  // alarms: periodic sync; identity: Google OAuth (§17)
+    "alarms", "identity" // alarms: periodic sync; identity: Google OAuth (§17)
   ],
-  "host_permissions": ["<all_urls>"],            // dev tool on own apps; tighten if desired
+  "host_permissions": ["<all_urls>"], // dev tool on own apps; tighten if desired
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel.html" },
   "action": { "default_title": "Form Prefill" },
@@ -447,6 +465,7 @@ src/
                  chrome.alarms-driven sync, debounced push)
 worker/          Cloudflare Worker — Google id_token validation + KV CRUD (§17)
 ```
+
 > `SaveForm` (label · standalone-vs-step · form/step/project pickers) is a **shared
 > component** rendered both inside the content script's in-page modal and the side panel.
 
@@ -502,7 +521,7 @@ projects / forms / presets.
   forms ungrouped): just drop `Project`/`projectId` and the project filter. Conversely both
   forms and standalone presets can live without a project ("No project" bucket), so you can
   start flat and adopt projects later.
-- **Submit blocking default**: spec'd as *don't block* (`preventSubmitOnCapture=false`).
+- **Submit blocking default**: spec'd as _don't block_ (`preventSubmitOnCapture=false`).
   Flip if you usually don't want the real submit firing during capture.
 - **Host scope**: `<all_urls>` for convenience; restrict to your app domains if preferred.
 - **Search scope**: label-only vs label + project + path. Spec'd as label + project + path.
@@ -545,14 +564,14 @@ same encryption passphrase unlocks them.
 
 `worker/src/index.ts` (deployed to `<account>.workers.dev`):
 
-| Method · path        | Purpose                                                |
-|----------------------|--------------------------------------------------------|
-| `GET /health`        | Unauth liveness                                        |
-| `GET /auth/me`       | Returns `{ sub, email, name }` for the verified token  |
-| `GET /auth/salt`     | Returns (or creates) the per-user 16-byte PBKDF2 salt  |
-| `GET /sync`          | Index — `{ buckets: { projects: { version, updatedAt }, ...} }` |
-| `GET /sync/:bucket`  | Returns `{ exists, ciphertext, iv, version, updatedAt }` |
-| `PUT /sync/:bucket`  | Body: `{ ciphertext, iv, version, updatedAt, expectedVersion? }`. 409 if `expectedVersion` mismatch. |
+| Method · path       | Purpose                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /health`       | Unauth liveness                                                                                      |
+| `GET /auth/me`      | Returns `{ sub, email, name }` for the verified token                                                |
+| `GET /auth/salt`    | Returns (or creates) the per-user 16-byte PBKDF2 salt                                                |
+| `GET /sync`         | Index — `{ buckets: { projects: { version, updatedAt }, ...} }`                                      |
+| `GET /sync/:bucket` | Returns `{ exists, ciphertext, iv, version, updatedAt }`                                             |
+| `PUT /sync/:bucket` | Body: `{ ciphertext, iv, version, updatedAt, expectedVersion? }`. 409 if `expectedVersion` mismatch. |
 
 Buckets = `projects | forms | presets`. CORS is open (`Access-Control-Allow-Origin: *`)
 because auth is per-request via the Bearer token; no cookies.
@@ -589,14 +608,14 @@ the OAuth popup).
 
 ### 17.5 End-to-end encryption
 
-| Step                    | Detail                                                    |
-|-------------------------|-----------------------------------------------------------|
-| Key derivation          | PBKDF2-HMAC-SHA256, **200,000 iterations**, AES-GCM-256   |
-| Salt                    | 16 random bytes per user, stored at `user:{sub}:salt`     |
-| Cipher                  | AES-GCM with a fresh 12-byte IV per write                 |
-| Payload                 | JSON-stringified bucket (`Project[]`, `FormDef[]`, `Preset[]` — *raw* rows including tombstones) |
-| Wire format             | `{ ciphertext: base64, iv: base64, version: number, updatedAt: number }` |
-| Persisted state         | Raw key bytes (base64) + salt + id_token cached in `chrome.storage.session` (cleared on browser close). Passphrase itself is **never** persisted or transmitted. |
+| Step            | Detail                                                                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key derivation  | PBKDF2-HMAC-SHA256, **200,000 iterations**, AES-GCM-256                                                                                                          |
+| Salt            | 16 random bytes per user, stored at `user:{sub}:salt`                                                                                                            |
+| Cipher          | AES-GCM with a fresh 12-byte IV per write                                                                                                                        |
+| Payload         | JSON-stringified bucket (`Project[]`, `FormDef[]`, `Preset[]` — _raw_ rows including tombstones)                                                                 |
+| Wire format     | `{ ciphertext: base64, iv: base64, version: number, updatedAt: number }`                                                                                         |
+| Persisted state | Raw key bytes (base64) + salt + id_token cached in `chrome.storage.session` (cleared on browser close). Passphrase itself is **never** persisted or transmitted. |
 
 If session storage is empty after a browser restart, sync pauses and the
 sidepanel prompts the user to re-enter the passphrase.
@@ -606,13 +625,14 @@ sidepanel prompts the user to re-enter the passphrase.
 The merge function (`src/sync/engine.ts`):
 
 ```ts
-function mergeById<T extends { id; updatedAt; deletedAt? }>(local: T[], remote: T[]): T[] {
-  const byId = new Map();
+function mergeById<T extends { id, updatedAt, deletedAt? }>(local: T[], remote: T[]): T[] {
+  const byId = new Map()
   for (const r of [...local, ...remote]) {
-    const prev = byId.get(r.id);
-    if (!prev || r.updatedAt > prev.updatedAt) byId.set(r.id, r);
+    const prev = byId.get(r.id)
+    if (!prev || r.updatedAt > prev.updatedAt)
+      byId.set(r.id, r)
   }
-  return [...byId.values()];
+  return [...byId.values()]
 }
 ```
 
@@ -632,12 +652,12 @@ function mergeById<T extends { id; updatedAt; deletedAt? }>(local: T[], remote: 
 Implemented in `entrypoints/background.ts` so it runs whether or not the side
 panel is open:
 
-| Trigger                                        | Source                          |
-|------------------------------------------------|----------------------------------|
-| Periodic                                       | `chrome.alarms` every 5 minutes  |
-| On local change                                | `chrome.storage.onChanged` for `projects`/`forms`/`presets`, debounced 2 s |
-| On startup / install                           | `runtime.onStartup` / `onInstalled` |
-| Manual ("Sync now" button)                     | `runtime.sendMessage({ kind: 'SYNC_NOW' })` from sidepanel |
+| Trigger                    | Source                                                                     |
+| -------------------------- | -------------------------------------------------------------------------- |
+| Periodic                   | `chrome.alarms` every 5 minutes                                            |
+| On local change            | `chrome.storage.onChanged` for `projects`/`forms`/`presets`, debounced 2 s |
+| On startup / install       | `runtime.onStartup` / `onInstalled`                                        |
+| Manual ("Sync now" button) | `runtime.sendMessage({ kind: 'SYNC_NOW' })` from sidepanel                 |
 
 `runSync()` is single-flight (a module-scoped `runningPromise` coalesces
 concurrent triggers), so debounced pushes don't pile up.
@@ -653,6 +673,7 @@ Google · Encryption passphrase · Sync now · last-sync timestamp · status bad
 ### 17.9 Setup
 
 See `README.md` for the full walkthrough:
+
 1. Pin the extension ID via `manifest.key` (so the OAuth redirect URI is stable).
 2. Create a Google Cloud OAuth client (Web app, redirect to `https://<ext-id>.chromiumapp.org/`).
 3. `pnpm wrangler login` → create your KV namespace → fill `worker/.env` → `pnpm wrangler secret put GOOGLE_CLIENT_ID` → `pnpm deploy`.

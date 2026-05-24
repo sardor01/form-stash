@@ -1,5 +1,5 @@
-import type { FieldSnapshot, Settings } from '../../shared/types';
-import { dispatchInputEvents, setNativeValue } from './native-value';
+import type { FieldSnapshot, Settings } from '../../shared/types'
+import { dispatchInputEvents, setNativeValue } from './native-value'
 
 export function writeText(
   el: Element,
@@ -8,21 +8,24 @@ export function writeText(
 ): void {
   if (
     !(
-      el instanceof HTMLInputElement ||
-      el instanceof HTMLTextAreaElement ||
-      el instanceof HTMLSelectElement
+      el instanceof HTMLInputElement
+      || el instanceof HTMLTextAreaElement
+      || el instanceof HTMLSelectElement
     )
   ) {
-    throw new Error('writeText requires input/textarea/select');
+    throw new TypeError('writeText requires input/textarea/select')
   }
-  const value = coerceToString(snap.value);
-  setNativeValue(el, value);
-  dispatchInputEvents(el, { blur: settings.fillEventBlur });
+  const value = coerceToString(snap.value)
+  setNativeValue(el, value)
+  dispatchInputEvents(el, { blur: settings.fillEventBlur })
 }
 
 function coerceToString(v: FieldSnapshot['value']): string {
-  if (v == null) return '';
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
-  if (Array.isArray(v)) return v.join(',');
-  return String(v);
+  if (v == null)
+    return ''
+  if (typeof v === 'boolean')
+    return v ? 'true' : 'false'
+  if (Array.isArray(v))
+    return v.join(',')
+  return String(v)
 }
