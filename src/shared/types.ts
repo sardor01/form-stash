@@ -42,6 +42,8 @@ export interface Project {
   id: string;
   name: string;
   createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
 }
 
 export interface Preset {
@@ -52,6 +54,7 @@ export interface Preset {
   path: string;
   createdAt: number;
   updatedAt: number;
+  deletedAt?: number;
   fields: FieldSnapshot[];
   formId: string | null;
   stepOrder: number | null;
@@ -65,6 +68,7 @@ export interface FormDef {
   entryUrl?: string;
   createdAt: number;
   updatedAt: number;
+  deletedAt?: number;
 }
 
 export interface Settings {

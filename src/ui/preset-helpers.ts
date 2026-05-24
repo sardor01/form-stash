@@ -53,7 +53,8 @@ export function buildPreset({
 }
 
 export function newProject(name: string): Project {
-  return { id: uuid(), name, createdAt: Date.now() };
+  const now = Date.now();
+  return { id: uuid(), name, createdAt: now, updatedAt: now };
 }
 
 export function newForm(label: string, projectId: string | null): FormDef {

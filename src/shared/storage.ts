@@ -8,6 +8,8 @@ import {
   type Settings,
 } from './types';
 
+const SCHEMA_VERSION = 2;
+
 const FIELD_TYPES: readonly FieldType[] = [
   'text',
   'textarea',
@@ -31,8 +33,6 @@ const FIELD_TYPES: readonly FieldType[] = [
   'contenteditable',
 ];
 
-const SCHEMA_VERSION = 1;
-
 const fieldSelectorSchema = z.object({
   name: z.string().optional(),
   id: z.string().optional(),
@@ -44,12 +44,7 @@ const fieldSelectorSchema = z.object({
 const fieldSnapshotSchema = z.object({
   selector: fieldSelectorSchema,
   type: z.enum(FIELD_TYPES as unknown as [FieldType, ...FieldType[]]),
-  value: z.union([
-    z.string(),
-    z.array(z.string()),
-    z.boolean(),
-    z.null(),
-  ]),
+  value: z.union([z.string(), z.array(z.string()), z.boolean(), z.null()]),
   visibleLabel: z.string().optional(),
   underlyingValue: z.string().optional(),
   inShadowRoot: z.boolean().optional(),
@@ -60,6 +55,8 @@ const projectSchema = z.object({
   id: z.string(),
   name: z.string(),
   createdAt: z.number(),
+  updatedAt: z.number(),
+  deletedAt: z.number().optional(),
 });
 
 const formSchema = z.object({
@@ -69,6 +66,7 @@ const formSchema = z.object({
   entryUrl: z.string().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  deletedAt: z.number().optional(),
 });
 
 const presetSchema = z.object({
@@ -79,6 +77,7 @@ const presetSchema = z.object({
   path: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  deletedAt: z.number().optional(),
   fields: z.array(fieldSnapshotSchema),
   formId: z.string().nullable(),
   stepOrder: z.number().nullable(),
@@ -127,18 +126,51 @@ export async function ensureSchema(): Promise<void> {
   );
   if (typeof v !== 'number') {
     await storage().set({ [STORAGE_KEYS.schemaVersion]: SCHEMA_VERSION });
+    return;
+  }
+  if (v < 2) {
+    await migrateV1toV2();
+    await storage().set({ [STORAGE_KEYS.schemaVersion]: 2 });
   }
 }
 
+async function migrateV1toV2(): Promise<void> {
+  const projectsRaw = (await storage().get(STORAGE_KEYS.projects))[
+    STORAGE_KEYS.projects
+  ];
+  if (Array.isArray(projectsRaw)) {
+    const migrated = projectsRaw.map((p) => ({
+      ...p,
+      updatedAt:
+        typeof p.updatedAt === 'number' ? p.updatedAt : (p.createdAt ?? Date.now()),
+    }));
+    await storage().set({ [STORAGE_KEYS.projects]: migrated });
+  }
+}
+
+/** Lists exclude tombstones (deleted records). */
 export async function listProjects(): Promise<Project[]> {
-  return readArray(STORAGE_KEYS.projects, projectSchema);
+  return (await listRawProjects()).filter((p) => p.deletedAt == null);
 }
 
 export async function listForms(): Promise<FormDef[]> {
-  return readArray(STORAGE_KEYS.forms, formSchema);
+  return (await listRawForms()).filter((f) => f.deletedAt == null);
 }
 
 export async function listPresets(): Promise<Preset[]> {
+  return (await listRawPresets()).filter((p) => p.deletedAt == null);
+}
+
+/** Raw lists include tombstones — only the sync engine should use these. */
+export async function listRawProjects(): Promise<Project[]> {
+  return readArray(STORAGE_KEYS.projects, projectSchema);
+}
+
+export async function listRawForms(): Promise<FormDef[]> {
+  return readArray(STORAGE_KEYS.forms, formSchema);
+}
+
+export async function listRawPresets(): Promise<Preset[]> {
   return readArray(STORAGE_KEYS.presets, presetSchema);
 }
 
@@ -167,7 +199,7 @@ export async function savePresets(presets: Preset[]): Promise<void> {
 }
 
 export async function upsertProject(project: Project): Promise<void> {
-  const list = await listProjects();
+  const list = await listRawProjects();
   const idx = list.findIndex((p) => p.id === project.id);
   if (idx >= 0) list[idx] = project;
   else list.push(project);
@@ -178,38 +210,57 @@ export async function deleteProject(
   projectId: string,
   mode: 'delete-contents' | 'unassign',
 ): Promise<void> {
+  const now = Date.now();
   const [projects, forms, presets] = await Promise.all([
-    listProjects(),
-    listForms(),
-    listPresets(),
+    listRawProjects(),
+    listRawForms(),
+    listRawPresets(),
   ]);
 
-  const formsInProject = forms.filter((f) => f.projectId === projectId);
+  const formsInProject = forms.filter(
+    (f) => f.projectId === projectId && f.deletedAt == null,
+  );
   const formIds = new Set(formsInProject.map((f) => f.id));
 
+  let nextForms = forms;
+  let nextPresets = presets;
+
   if (mode === 'delete-contents') {
-    const nextForms = forms.filter((f) => f.projectId !== projectId);
-    const nextPresets = presets.filter(
-      (p) => !(p.formId && formIds.has(p.formId)) && p.projectId !== projectId,
+    nextForms = forms.map((f) =>
+      formIds.has(f.id) ? { ...f, deletedAt: now, updatedAt: now } : f,
     );
-    await Promise.all([saveForms(nextForms), savePresets(nextPresets)]);
+    nextPresets = presets.map((p) => {
+      const isInDeletedForm = p.formId != null && formIds.has(p.formId);
+      const isStandaloneInProject =
+        p.formId == null && p.projectId === projectId;
+      return isInDeletedForm || isStandaloneInProject
+        ? { ...p, deletedAt: now, updatedAt: now }
+        : p;
+    });
   } else {
-    const nextForms = forms.map((f) =>
-      f.projectId === projectId ? { ...f, projectId: null } : f,
+    nextForms = forms.map((f) =>
+      formIds.has(f.id) ? { ...f, projectId: null, updatedAt: now } : f,
     );
-    const nextPresets = presets.map((p) =>
-      p.projectId === projectId && !p.formId
-        ? { ...p, projectId: null }
+    nextPresets = presets.map((p) =>
+      p.formId == null && p.projectId === projectId
+        ? { ...p, projectId: null, updatedAt: now }
         : p,
     );
-    await Promise.all([saveForms(nextForms), savePresets(nextPresets)]);
   }
 
-  await saveProjects(projects.filter((p) => p.id !== projectId));
+  const nextProjects = projects.map((p) =>
+    p.id === projectId ? { ...p, deletedAt: now, updatedAt: now } : p,
+  );
+
+  await Promise.all([
+    saveProjects(nextProjects),
+    saveForms(nextForms),
+    savePresets(nextPresets),
+  ]);
 }
 
 export async function upsertForm(form: FormDef): Promise<void> {
-  const list = await listForms();
+  const list = await listRawForms();
   const idx = list.findIndex((f) => f.id === form.id);
   if (idx >= 0) list[idx] = form;
   else list.push(form);
@@ -220,21 +271,31 @@ export async function deleteForm(
   formId: string,
   mode: 'delete-steps' | 'detach-steps',
 ): Promise<void> {
-  const [forms, presets] = await Promise.all([listForms(), listPresets()]);
+  const now = Date.now();
+  const [forms, presets] = await Promise.all([
+    listRawForms(),
+    listRawPresets(),
+  ]);
   const targetForm = forms.find((f) => f.id === formId);
-  const nextForms = forms.filter((f) => f.id !== formId);
+
+  const nextForms = forms.map((f) =>
+    f.id === formId ? { ...f, deletedAt: now, updatedAt: now } : f,
+  );
 
   let nextPresets: Preset[];
   if (mode === 'delete-steps') {
-    nextPresets = presets.filter((p) => p.formId !== formId);
+    nextPresets = presets.map((p) =>
+      p.formId === formId ? { ...p, deletedAt: now, updatedAt: now } : p,
+    );
   } else {
     nextPresets = presets.map((p) =>
-      p.formId === formId
+      p.formId === formId && p.deletedAt == null
         ? {
             ...p,
             formId: null,
             stepOrder: null,
             projectId: targetForm?.projectId ?? null,
+            updatedAt: now,
           }
         : p,
     );
@@ -244,7 +305,7 @@ export async function deleteForm(
 }
 
 export async function upsertPreset(preset: Preset): Promise<void> {
-  const list = await listPresets();
+  const list = await listRawPresets();
   const idx = list.findIndex((p) => p.id === preset.id);
   if (idx >= 0) list[idx] = preset;
   else list.push(preset);
@@ -252,13 +313,16 @@ export async function upsertPreset(preset: Preset): Promise<void> {
 }
 
 export async function deletePreset(presetId: string): Promise<void> {
-  const list = await listPresets();
+  const now = Date.now();
+  const list = await listRawPresets();
   const target = list.find((p) => p.id === presetId);
-  const without = list.filter((p) => p.id !== presetId);
+  const next = list.map((p) =>
+    p.id === presetId ? { ...p, deletedAt: now, updatedAt: now } : p,
+  );
   if (target?.formId) {
-    await savePresets(renumberStepsForForm(without, target.formId));
+    await savePresets(renumberStepsForForm(next, target.formId));
   } else {
-    await savePresets(without);
+    await savePresets(next);
   }
 }
 
@@ -266,11 +330,12 @@ export async function reorderSteps(
   formId: string,
   orderedStepIds: string[],
 ): Promise<void> {
-  const presets = await listPresets();
+  const now = Date.now();
+  const presets = await listRawPresets();
   const order = new Map(orderedStepIds.map((id, i) => [id, i + 1]));
   const next = presets.map((p) =>
     p.formId === formId && order.has(p.id)
-      ? { ...p, stepOrder: order.get(p.id)!, updatedAt: Date.now() }
+      ? { ...p, stepOrder: order.get(p.id)!, updatedAt: now }
       : p,
   );
   await savePresets(renumberStepsForForm(next, formId));
@@ -286,14 +351,18 @@ function renumberStepsForChangedPreset(
 }
 
 function renumberStepsForForm(list: Preset[], formId: string): Preset[] {
-  const steps = list
-    .filter((p) => p.formId === formId)
+  const liveSteps = list
+    .filter((p) => p.formId === formId && p.deletedAt == null)
     .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0));
-  const map = new Map<string, number>();
-  steps.forEach((s, i) => map.set(s.id, i + 1));
-  return list.map((p) =>
-    map.has(p.id) ? { ...p, stepOrder: map.get(p.id)! } : p,
-  );
+  const now = Date.now();
+  const newOrder = new Map<string, number>();
+  liveSteps.forEach((s, i) => newOrder.set(s.id, i + 1));
+  return list.map((p) => {
+    const target = newOrder.get(p.id);
+    if (target == null) return p;
+    if (p.stepOrder === target) return p;
+    return { ...p, stepOrder: target, updatedAt: now };
+  });
 }
 
 export async function getAllData(): Promise<{

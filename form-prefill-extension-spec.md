@@ -127,6 +127,8 @@ interface Project {
   id: string;          // uuid
   name: string;
   createdAt: number;
+  updatedAt: number;   // bumped on edit; drives sync LWW merge
+  deletedAt?: number;  // tombstone for soft delete (so deletes can sync)
 }
 
 type FieldType =
@@ -164,6 +166,7 @@ interface Preset {
   path: string;             // pathname (for surfacing matches)
   createdAt: number;
   updatedAt: number;
+  deletedAt?: number;       // tombstone for soft delete
   fields: FieldSnapshot[];
 
   // grouping — a preset is EITHER a step of a Form, OR standalone:
@@ -179,7 +182,9 @@ interface Form {            // "parent form" — a multi-step form
   entryUrl?: string;        // optional base / first-step URL
   createdAt: number;
   updatedAt: number;
-  // steps = Presets where formId === this.id, ordered by stepOrder
+  deletedAt?: number;       // tombstone for soft delete
+  // steps = Presets where formId === this.id and deletedAt == null,
+  // ordered by stepOrder
 }
 
 interface Settings {
@@ -198,7 +203,12 @@ Storage keys: `projects` (Project[]), `forms` (Form[]), `presets` (Preset[]),
 **Invariants:** a step preset has non-null `formId` + `stepOrder` and ignores its own
 `projectId` (project is derived from its `Form`). A standalone preset has `formId = null`,
 `stepOrder = null`, and its own `projectId`. `stepOrder` is contiguous (1..N) within a
-form; deleting/reordering steps renumbers.
+form **excluding tombstones**; deleting/reordering steps renumbers and bumps `updatedAt`
+on the renumbered rows so sync converges.
+
+**Soft delete:** all three entities use tombstones (`deletedAt`) rather than hard
+removal so deletes propagate via sync. UI list reads filter tombstones; sync
+reads include them. See §17.
 
 ---
 
@@ -400,7 +410,10 @@ high z-index, shadow-DOM-isolated styling so the host page CSS can't bleed in.
 {
   "manifest_version": 3,
   "name": "Form Prefill & Replay",
-  "permissions": ["storage", "scripting", "activeTab", "sidePanel", "unlimitedStorage"],
+  "permissions": [
+    "storage", "scripting", "activeTab", "sidePanel", "unlimitedStorage",
+    "alarms", "identity"  // alarms: periodic sync; identity: Google OAuth (§17)
+  ],
   "host_permissions": ["<all_urls>"],            // dev tool on own apps; tighten if desired
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel.html" },
@@ -420,12 +433,19 @@ high z-index, shadow-DOM-isolated styling so the host page CSS can't bleed in.
 
 ```
 src/
-  shared/        storage.ts (zod schemas, CRUD, migrations), types.ts, messaging.ts
+  shared/        storage.ts (zod schemas, CRUD, soft-delete, migrations),
+                 types.ts, messaging.ts
   content/       detect-submit.ts, snapshot.ts, target-picker.ts, fill-engine.ts,
-                 writers/*, save-modal/*
-  sidepanel/     App.tsx, CaptureButton.tsx, SaveForm.tsx, PresetsTree.tsx,
-                 ProjectFilter.tsx, ProjectsManager.tsx, FormsManager.tsx, FillReport.tsx
-  background/    index.ts (router, open side panel on action click)
+                 dom-utils.ts, writers/*, save-modal/*
+  sidepanel/     App.tsx, components/* (CaptureButton, SaveForm, PresetsTree,
+                 ProjectFilter, ManagePanel, FillReportView, SyncPanel, …)
+  ui/            SaveForm.tsx + preset-helpers.ts (shared between in-page modal
+                 and side panel)
+  sync/          oauth.ts, crypto.ts, client.ts, engine.ts, config.ts, types.ts
+                 (cross-profile sync — see §17)
+  background/    via entrypoints/background.ts (open side panel on action click,
+                 chrome.alarms-driven sync, debounced push)
+worker/          Cloudflare Worker — Google id_token validation + KV CRUD (§17)
 ```
 > `SaveForm` (label · standalone-vs-step · form/step/project pickers) is a **shared
 > component** rendered both inside the content script's in-page modal and the side panel.
@@ -487,3 +507,160 @@ projects / forms / presets.
 - **Host scope**: `<all_urls>` for convenience; restrict to your app domains if preferred.
 - **Search scope**: label-only vs label + project + path. Spec'd as label + project + path.
 - **Build tool**: WXT recommended; CRXJS/Vite is a fine alternative.
+
+---
+
+## 17. Cross-profile sync (Cloudflare KV, opt-in)
+
+Sync is **opt-in** — without it the extension stays fully local-first against
+`chrome.storage.local`. With it enabled, the same projects/forms/presets show
+up across every Chrome profile signed into the same Google account, and the
+same encryption passphrase unlocks them.
+
+### 17.1 Architecture
+
+```
+┌──────────────┐  Google id_token (Bearer)  ┌────────────────┐  KV ops  ┌─────┐
+│ extension    │ ─────────────────────────► │ Cloudflare     │ ───────► │ KV  │
+│ (background  │ ◄───────────────────────── │ Worker         │ ◄─────── │     │
+│  + sidepanel)│   encrypted blobs only     │ (form-stash-   │          └─────┘
+└──────────────┘                            │  sync)         │
+        │                                   └────────────────┘
+        │ AES-GCM key derived locally
+        │ from a user-set passphrase
+        └─ key + id_token cached in
+           chrome.storage.session
+```
+
+- **Local-first.** All reads/writes go to `chrome.storage.local` immediately;
+  sync runs in the background and reconciles on its own.
+- **Stateless worker.** Authenticates every request from scratch by verifying
+  the Google id_token against Google's JWKS — no session DB.
+- **End-to-end encrypted.** The Worker only ever sees ciphertext + IV + version
+  metadata. The encryption key is derived client-side from a passphrase the
+  user types in each profile; Cloudflare and anyone with a stolen Google token
+  cannot decrypt.
+
+### 17.2 Worker endpoints
+
+`worker/src/index.ts` (deployed to `<account>.workers.dev`):
+
+| Method · path        | Purpose                                                |
+|----------------------|--------------------------------------------------------|
+| `GET /health`        | Unauth liveness                                        |
+| `GET /auth/me`       | Returns `{ sub, email, name }` for the verified token  |
+| `GET /auth/salt`     | Returns (or creates) the per-user 16-byte PBKDF2 salt  |
+| `GET /sync`          | Index — `{ buckets: { projects: { version, updatedAt }, ...} }` |
+| `GET /sync/:bucket`  | Returns `{ exists, ciphertext, iv, version, updatedAt }` |
+| `PUT /sync/:bucket`  | Body: `{ ciphertext, iv, version, updatedAt, expectedVersion? }`. 409 if `expectedVersion` mismatch. |
+
+Buckets = `projects | forms | presets`. CORS is open (`Access-Control-Allow-Origin: *`)
+because auth is per-request via the Bearer token; no cookies.
+
+### 17.3 KV layout
+
+```
+user:{sub}:salt              → { salt: base64(16), createdAt }
+user:{sub}:bucket:projects   → { ciphertext, iv, version, updatedAt }
+user:{sub}:bucket:forms      → { ciphertext, iv, version, updatedAt }
+user:{sub}:bucket:presets    → { ciphertext, iv, version, updatedAt }
+```
+
+`{sub}` is the Google account's stable subject from the verified id_token.
+The KV namespace ID lives in `worker/.env` (gitignored) and is interpolated
+into `wrangler.toml` by `worker/scripts/render-wrangler.mjs` at deploy time.
+`GOOGLE_CLIENT_ID` lives in `wrangler secret put` for production and
+`.dev.vars` for `wrangler dev`.
+
+### 17.4 Authentication — Google OAuth implicit flow
+
+`chrome.identity.launchWebAuthFlow` with `response_type=id_token` against
+`https://accounts.google.com/o/oauth2/v2/auth`. Redirect URI is the extension's
+`https://<extension-id>.chromiumapp.org/`. A nonce + state guard the response.
+The Worker verifies the id_token against Google's JWKS (cached in module scope
+for an hour) on every request — `RS256` signature, allowed `iss`, exact `aud`
+match against `GOOGLE_CLIENT_ID`, non-expired `exp`.
+
+**Token lifetime:** id_tokens are valid 1 hour. After expiry, the background
+sync engine tries one silent re-auth (`prompt=none`); on failure it marks the
+config `lastStatus = 'needs-signin'` and surfaces a banner in the sidepanel.
+Interactive sign-in only happens from the sidepanel (where a window exists for
+the OAuth popup).
+
+### 17.5 End-to-end encryption
+
+| Step                    | Detail                                                    |
+|-------------------------|-----------------------------------------------------------|
+| Key derivation          | PBKDF2-HMAC-SHA256, **200,000 iterations**, AES-GCM-256   |
+| Salt                    | 16 random bytes per user, stored at `user:{sub}:salt`     |
+| Cipher                  | AES-GCM with a fresh 12-byte IV per write                 |
+| Payload                 | JSON-stringified bucket (`Project[]`, `FormDef[]`, `Preset[]` — *raw* rows including tombstones) |
+| Wire format             | `{ ciphertext: base64, iv: base64, version: number, updatedAt: number }` |
+| Persisted state         | Raw key bytes (base64) + salt + id_token cached in `chrome.storage.session` (cleared on browser close). Passphrase itself is **never** persisted or transmitted. |
+
+If session storage is empty after a browser restart, sync pauses and the
+sidepanel prompts the user to re-enter the passphrase.
+
+### 17.6 Conflict resolution — per-record LWW with tombstones
+
+The merge function (`src/sync/engine.ts`):
+
+```ts
+function mergeById<T extends { id; updatedAt; deletedAt? }>(local: T[], remote: T[]): T[] {
+  const byId = new Map();
+  for (const r of [...local, ...remote]) {
+    const prev = byId.get(r.id);
+    if (!prev || r.updatedAt > prev.updatedAt) byId.set(r.id, r);
+  }
+  return [...byId.values()];
+}
+```
+
+- Per **record** (not per blob), the side with the higher `updatedAt` wins.
+- Deletes are tombstones — they have an `updatedAt` like any other write, so a
+  delete on profile A naturally overrides an older edit on profile B (and vice
+  versa).
+- Step renumbering bumps `updatedAt` on every renumbered preset to avoid two
+  profiles ending up with the same `updatedAt` but different `stepOrder`
+  (which would be a tie the merge cannot resolve deterministically).
+- After merge, the engine pushes each bucket whose merged content differs from
+  the remote, using `expectedVersion` for optimistic concurrency. On 409 the
+  next periodic tick will re-pull and try again.
+
+### 17.7 Sync triggers
+
+Implemented in `entrypoints/background.ts` so it runs whether or not the side
+panel is open:
+
+| Trigger                                        | Source                          |
+|------------------------------------------------|----------------------------------|
+| Periodic                                       | `chrome.alarms` every 5 minutes  |
+| On local change                                | `chrome.storage.onChanged` for `projects`/`forms`/`presets`, debounced 2 s |
+| On startup / install                           | `runtime.onStartup` / `onInstalled` |
+| Manual ("Sync now" button)                     | `runtime.sendMessage({ kind: 'SYNC_NOW' })` from sidepanel |
+
+`runSync()` is single-flight (a module-scoped `runningPromise` coalesces
+concurrent triggers), so debounced pushes don't pile up.
+
+### 17.8 Settings UI
+
+The sidepanel `☁️ Cloud sync` tab (`SyncPanel.tsx`) exposes:
+Worker URL · Google OAuth Client ID · **Enable sync** toggle · Sign in with
+Google · Encryption passphrase · Sync now · last-sync timestamp · status badge
+(`idle | syncing | ok | error | needs-passphrase | needs-signin`) · Sign out
+(clears session + disables sync).
+
+### 17.9 Setup
+
+See `README.md` for the full walkthrough:
+1. Pin the extension ID via `manifest.key` (so the OAuth redirect URI is stable).
+2. Create a Google Cloud OAuth client (Web app, redirect to `https://<ext-id>.chromiumapp.org/`).
+3. `pnpm wrangler login` → create your KV namespace → fill `worker/.env` → `pnpm wrangler secret put GOOGLE_CLIENT_ID` → `pnpm deploy`.
+4. In each profile: paste Worker URL + Client ID into the side panel, sign in with Google, set the (shared) passphrase.
+
+### 17.10 What's intentionally out of scope
+
+- **No real-time push** — sync is pull/push on the triggers above; not WebSocket-driven.
+- **No multi-account on a single profile** — one Google sign-in per profile at a time.
+- **No invitation / sharing** — sync is for one identity's own profiles, not collaboration.
+- **No conflict UI** — LWW resolves silently; there's no "review conflicts" screen.

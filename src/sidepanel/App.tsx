@@ -30,6 +30,7 @@ import {
 } from './components/ProjectFilter';
 import { SearchBar } from './components/SearchBar';
 import { SettingsPanel } from './components/SettingsPanel';
+import { SyncPanel } from './components/SyncPanel';
 import { useActiveTabInfo, useStore } from './hooks';
 
 type View =
@@ -38,6 +39,7 @@ type View =
   | { kind: 'save'; snapshot: CaptureResult; intent: CaptureIntent }
   | { kind: 'report'; report: FillReport; preset: Preset }
   | { kind: 'manage' }
+  | { kind: 'sync' }
   | { kind: 'settings' };
 
 type CaptureIntent =
@@ -256,9 +258,14 @@ export function App() {
         <SettingsPanel onClose={() => setView({ kind: 'browse' })} />
       )}
 
+      {view.kind === 'sync' && (
+        <SyncPanel onClose={() => setView({ kind: 'browse' })} />
+      )}
+
       {(view.kind === 'browse' ||
         view.kind === 'save' ||
-        view.kind === 'report') &&
+        view.kind === 'report' ||
+        view.kind === 'sync') &&
         store.loaded && (
           <div className="flex-1 overflow-auto">
             <PresetsTree
@@ -320,6 +327,17 @@ function Header({
         <CaptureButton onClick={onCapture} busy={busy} />
         <div className="ml-auto flex gap-1">
           <HeaderButton
+            active={view.kind === 'sync'}
+            onClick={() =>
+              setView(
+                view.kind === 'sync' ? { kind: 'browse' } : { kind: 'sync' },
+              )
+            }
+            label="Cloud sync"
+          >
+            ☁️
+          </HeaderButton>
+          <HeaderButton
             active={view.kind === 'manage'}
             onClick={() =>
               setView(
@@ -341,7 +359,7 @@ function Header({
                   : { kind: 'settings' },
               )
             }
-            label="Settings"
+            label="Capture settings"
           >
             🛠
           </HeaderButton>

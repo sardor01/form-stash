@@ -8,7 +8,14 @@ export default defineConfig({
     name: 'Form Stash',
     description:
       'Capture filled form state and replay it later. A developer tool for testing forms in modern SPAs.',
-    permissions: ['storage', 'scripting', 'activeTab', 'unlimitedStorage'],
+    permissions: [
+      'storage',
+      'scripting',
+      'activeTab',
+      'unlimitedStorage',
+      'alarms',
+      'identity',
+    ],
     host_permissions: ['<all_urls>'],
     action: { default_title: 'Form Stash' },
     web_accessible_resources: [

@@ -1,0 +1,15 @@
+name = "form-stash-sync"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+
+# Generated from this template at `pnpm prepare-config` time by
+# scripts/render-wrangler.mjs — values come from worker/.env.
+# DO NOT edit wrangler.toml directly; edit this template + .env instead.
+
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "__KV_NAMESPACE_ID__"
+
+# GOOGLE_CLIENT_ID is provided per-environment:
+# - local dev:  worker/.dev.vars (gitignored)
+# - production: `pnpm wrangler secret put GOOGLE_CLIENT_ID`

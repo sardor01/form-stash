@@ -36,7 +36,7 @@ export function ManagePanel({ projects, forms, onClose }: Props) {
   async function renameProject(p: Project) {
     const name = window.prompt('Rename project', p.name);
     if (name && name.trim() && name !== p.name) {
-      await upsertProject({ ...p, name: name.trim() });
+      await upsertProject({ ...p, name: name.trim(), updatedAt: Date.now() });
     }
   }
 
