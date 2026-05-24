@@ -1,3 +1,9 @@
 export default defineBackground(() => {
-  console.log('Hello background!', { id: browser.runtime.id });
+  if (browser.sidePanel?.setPanelBehavior) {
+    browser.sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch((err) =>
+        console.error('[form-stash] sidePanel.setPanelBehavior failed', err),
+      );
+  }
 });
