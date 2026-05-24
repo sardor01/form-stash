@@ -17,6 +17,7 @@ import {
 import { writeContenteditable } from './writers/contenteditable-writer'
 import { writeCustomWidget } from './writers/custom-writer'
 import { writeSelect } from './writers/select-writer'
+import { writeTagList } from './writers/tag-list-writer'
 import { writeText } from './writers/text-writer'
 import { writeCheckbox, writeRadio } from './writers/toggle-writer'
 
@@ -88,6 +89,9 @@ async function applyOne(
         return { ...base, status: 'filled' }
       case 'contenteditable':
         writeContenteditable(el, field)
+        return { ...base, status: 'filled' }
+      case 'tag-list':
+        await writeTagList(el, field, settings)
         return { ...base, status: 'filled' }
       case 'custom': {
         const root = getOwningForm(el) ?? document

@@ -57,18 +57,35 @@ export function writeRadio(
     return
   }
 
-  const desiredLabel = String(desired)
-  const group = el.closest('[role=radiogroup]') ?? root
+  // ARIA radio (Radix/shadcn-style: <button role="radio" value="...">).
+  // Capture stores `underlyingValue` = the button's `value` attribute and
+  // `visibleLabel` = the wrapping <label>'s text. Match by underlyingValue
+  // first since that's the only stable identifier across renders.
+  const desiredValue = snap.underlyingValue ?? String(desired)
+  const desiredLabel = snap.visibleLabel ?? String(desired)
+
+  const group
+    = el.getAttribute('role') === 'radiogroup'
+      ? el
+      : (el.closest('[role=radiogroup]')
+        ?? (root instanceof Element || root instanceof Document
+          ? root
+          : document))
   const radios = Array.from(
     (group as ParentNode).querySelectorAll('[role=radio]'),
   )
-  const match = radios.find(
-    r =>
-      r.getAttribute('aria-label') === desiredLabel
-      || r.textContent?.trim() === desiredLabel,
-  )
-  if (match)
+
+  const match
+    = radios.find(r => r.getAttribute('value') === desiredValue)
+      ?? radios.find(r => r.getAttribute('aria-label') === desiredLabel)
+      ?? radios.find(r => r.textContent?.trim() === desiredLabel)
+      ?? radios.find(
+        r => r.closest('label')?.textContent?.trim() === desiredLabel,
+      )
+
+  if (match) {
     (match as HTMLElement).click()
+  }
 }
 
 function cssEscape(s: string): string {

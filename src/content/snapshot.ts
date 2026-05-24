@@ -186,9 +186,15 @@ function dedupeRadios(elements: Element[]): Element[] {
       seenRadioNames.add(key)
     }
     if (el.getAttribute('role') === 'radio') {
-      const groupId = el.closest('[role=radiogroup]')?.id || ''
-      const name = el.getAttribute('aria-labelledby') || ''
-      const key = `aria-radio::${groupId}::${name}`
+      // Dedupe all radio buttons in the same radiogroup to a single field.
+      // Falls back to aria-labelledby when the group has no id, then to the
+      // group element identity itself.
+      const group = el.closest('[role=radiogroup]')
+      const groupKey
+        = group?.id
+          || group?.getAttribute('aria-labelledby')
+          || (group ? `__group${elements.indexOf(group)}` : '__nogroup')
+      const key = `aria-radio::${groupKey}`
       if (seenRadioNames.has(key))
         continue
       seenRadioNames.add(key)
@@ -214,6 +220,24 @@ function snapshotField(
     type,
     value: null,
     inShadowRoot: isInShadowRoot(el) || undefined,
+  }
+
+  // "Tag input" pattern: a text input whose sibling elements look like
+  // committed chips (each containing a remove button + non-trivial text).
+  // The committed values live in React state, not in any form control, so
+  // we capture the chip texts and treat this as a tag-list field.
+  if (
+    (type === 'text' || type === 'textarea')
+    && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+  ) {
+    const chips = detectTagChips(el)
+    if (chips) {
+      return {
+        ...base,
+        type: 'tag-list',
+        value: chips.map(readChipText),
+      }
+    }
   }
 
   switch (type) {
@@ -259,17 +283,29 @@ function snapshotField(
     case 'radio': {
       if (el instanceof HTMLInputElement) {
         const checked = findCheckedRadio(el, root)
-        return { ...base, value: checked?.value ?? null }
+        const checkedLabel = checked ? radioVisibleLabel(checked) : undefined
+        return {
+          ...base,
+          value: checked?.value ?? null,
+          visibleLabel: checkedLabel,
+        }
       }
       const group = el.closest('[role=radiogroup]') ?? root
       const checked = queryAllDeep(group, '[role=radio]').find(
         r => r.getAttribute('aria-checked') === 'true',
       )
-      const label
-        = checked?.getAttribute('aria-label')
-          || checked?.textContent?.trim()
-          || null
-      return { ...base, value: label, visibleLabel: label ?? undefined }
+      // Radix RadioGroup.Item is a <button role="radio" value="..."> whose
+      // textContent is empty (the text lives in a sibling label). The `value`
+      // attribute is the only reliable underlying identifier; the visible
+      // label has to come from the wrapping <label> as a fallback.
+      const checkedValue = checked?.getAttribute('value') ?? null
+      const visibleLabel = checked ? radioVisibleLabel(checked) : undefined
+      return {
+        ...base,
+        value: checkedValue ?? visibleLabel ?? null,
+        visibleLabel,
+        underlyingValue: checkedValue ?? undefined,
+      }
     }
 
     case 'contenteditable': {
@@ -386,6 +422,67 @@ function findAssociatedHiddenControl(
     sibling = sibling.nextElementSibling
   }
   return null
+}
+
+/**
+ * Detect a "tag input" / "chip input" pattern. Returns the chip elements if
+ * the input's parent contains siblings that look like committed value chips
+ * (each is non-self-button, contains a button/[role=button], and has visible
+ * text after stripping that button). Returns null if no such siblings exist.
+ */
+function detectTagChips(input: HTMLElement): Element[] | null {
+  const parent = input.parentElement
+  if (!parent)
+    return null
+  const siblings = Array.from(parent.children).filter(c => c !== input)
+  if (siblings.length === 0)
+    return null
+  const chips = siblings.filter(s => isChipLike(s))
+  return chips.length > 0 ? chips : null
+}
+
+function isChipLike(el: Element): boolean {
+  if (el.matches('button, [role=button], svg, label'))
+    return false
+  if (!el.querySelector('button, [role=button]'))
+    return false
+  return readChipText(el).length > 0
+}
+
+/**
+ * Concatenate text-node contents inside an element, skipping buttons and svg
+ * (which usually hold the "remove" icon, not the chip value).
+ */
+function readChipText(el: Element): string {
+  let out = ''
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent ?? ''
+      continue
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE)
+      continue
+    const child = node as Element
+    if (child.matches('button, [role=button], svg'))
+      continue
+    out += readChipText(child)
+  }
+  return out.trim()
+}
+
+/**
+ * Best-effort visible label for a radio: aria-label first, then the button's
+ * own text, then the wrapping <label>'s text (Radix/shadcn-style radio cards).
+ */
+function radioVisibleLabel(el: Element): string | undefined {
+  const aria = el.getAttribute('aria-label')?.trim()
+  if (aria)
+    return aria
+  const own = el.textContent?.trim()
+  if (own)
+    return own
+  const wrapping = el.closest('label')?.textContent?.trim()
+  return wrapping || undefined
 }
 
 function findCheckedRadio(

@@ -28,6 +28,7 @@ const FIELD_TYPES: readonly FieldType[] = [
   'range',
   'custom',
   'contenteditable',
+  'tag-list',
 ]
 
 const fieldSelectorSchema = z.object({

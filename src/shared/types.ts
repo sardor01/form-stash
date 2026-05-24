@@ -19,6 +19,7 @@ export type FieldType
     | 'range'
     | 'custom'
     | 'contenteditable'
+    | 'tag-list'
 
 export interface FieldSelector {
   name?: string
