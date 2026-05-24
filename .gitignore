@@ -18,6 +18,7 @@ web-ext.config.ts
 .env
 .env.local
 .env.*.local
+extension-signing.private.pem
 
 # Editor directories and files
 .vscode/*
